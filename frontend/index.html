@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>inChurch Ops | Gestão de Louvor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Spartan:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/app/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-wrap">
+        <h1>familia.</h1>
+      </div>
+      <div class="top-actions">
+        <button id="theme-toggle" class="btn theme-toggle" type="button" aria-label="Alternar tema" title="Alternar tema">
+          <span class="theme-icon theme-icon-sun" aria-hidden="true">☀</span>
+          <span class="theme-icon theme-icon-moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn" type="button" aria-label="Notificações">🔔</button>
+        <button id="open-account-panel" class="icon-btn" type="button" aria-label="Configurações">⚙</button>
+        <img id="profile-photo-preview" class="top-avatar" alt="Foto de perfil" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=96&q=80" />
+        <span id="logged-user"></span>
+        <button id="logout-btn" class="btn primary">Sair</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <section id="auth-card" class="card auth-card">
+        <h2>Entrar na plataforma</h2>
+        <p>Gestão de voluntários, escala e repertório com fluxo de aprovação.</p>
+        <form id="login-form" class="stack">
+          <input id="login-email" type="email" placeholder="Email" required />
+          <input id="login-password" type="password" placeholder="Senha" required />
+          <button type="submit" class="btn primary">Entrar</button>
+        </form>
+        <small>
+          Admin: admin@igreja.local / admin123<br />
+          Líder: lider@igreja.local / lider123<br />
+          Voluntário: voluntario@igreja.local / voluntario123
+        </small>
+      </section>
+
+      <section id="workspace" class="workspace hidden">
+        <aside class="card sidebar">
+          <button class="tab active" data-tab="dashboard">
+            <span class="tab-icon">⌗</span><span class="tab-label">Dashboard</span>
+          </button>
+          <button class="tab" data-tab="voluntarios">
+            <span class="tab-icon">👥</span><span class="tab-label">Voluntários</span>
+          </button>
+          <button class="tab" data-tab="repertorio" data-feature="repertoire">
+            <span class="tab-icon">♪</span><span class="tab-label">Repertório</span>
+          </button>
+          <button class="tab" data-tab="cultos">
+            <span class="tab-icon">⏵</span><span class="tab-label">Cultos</span>
+          </button>
+          <button class="tab" id="volunteer-pending-tab" data-tab="cultos" data-role="VOLUNTARIO">
+            <span class="tab-icon">!</span><span class="tab-label">Aprovações pendentes</span>
+          </button>
+          <button class="tab" data-tab="planejamento" data-role="ADMIN,LIDER_MINISTERIO">
+            <span class="tab-icon">⌚</span><span class="tab-label">Planejamento</span>
+          </button>
+          <button class="tab" data-tab="aprovacoes" data-role="ADMIN,LIDER_MINISTERIO">
+            <span class="tab-icon">✓</span><span class="tab-label">Aprovações</span>
+          </button>
+          <button class="tab" data-tab="notificacoes">
+            <span class="tab-icon">🔔</span><span class="tab-label">Notificações</span>
+          </button>
+          <button class="tab" data-tab="registros" data-role="ADMIN,LIDER_MINISTERIO">
+            <span class="tab-icon">📝</span><span class="tab-label">Registros</span>
+          </button>
+          <button class="tab" data-tab="ministerios" data-role="ADMIN">
+            <span class="tab-icon">⌘</span><span class="tab-label">Ministérios</span>
+          </button>
+        </aside>
+
+        <section id="tab-dashboard" class="card panel">
+          <h2>Central do Ministério</h2>
+          <div id="stats" class="stats"></div>
+          <div id="status-summary" class="status-bar-wrap">
+            <div class="status-bar">
+              <span id="status-green" class="status-segment status-green"></span>
+              <span id="status-yellow" class="status-segment status-yellow"></span>
+              <span id="status-red" class="status-segment status-red"></span>
+            </div>
+            <p id="status-text" class="status-text"></p>
+          </div>
+          <div class="dashboard-grid">
+            <article class="card mini-panel" data-feature="repertoire">
+              <h3>Repertório em Destaque</h3>
+              <ul id="dashboard-repertoire" class="list"></ul>
+            </article>
+            <article class="card mini-panel">
+              <h3>Próximos Cultos</h3>
+              <ul id="dashboard-services" class="list"></ul>
+            </article>
+          </div>
+        </section>
+
+        <section id="tab-voluntarios" class="card panel hidden">
+          <h2>Voluntários e Agenda</h2>
+          <form id="user-form" class="form-grid" data-role="ADMIN">
+            <input id="user-name" placeholder="Nome" required />
+            <input id="user-email" type="email" placeholder="Email" required />
+            <input id="user-phone" placeholder="Telefone" />
+            <input id="user-password" type="password" placeholder="Senha inicial" required />
+            <select id="user-role" required>
+              <option value="">Perfil</option>
+              <option value="LIDER_MINISTERIO">Líder de ministério</option>
+              <option value="VOLUNTARIO">Voluntário</option>
+            </select>
+            <select id="user-ministry" multiple></select>
+            <button type="submit" class="btn primary">Criar usuário</button>
+          </form>
+
+          <form id="availability-form" class="form-grid" data-role="ADMIN,LIDER_MINISTERIO,VOLUNTARIO">
+            <select id="availability-user"></select>
+            <input id="availability-start" type="date" required />
+            <input id="availability-end" type="date" required />
+            <input id="availability-reason" placeholder="Motivo do bloqueio" />
+            <button type="submit" class="btn primary">Bloquear agenda</button>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Email</th>
+                  <th>Perfil</th>
+                  <th>Ministérios</th>
+                  <th>Status</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody id="users-table"></tbody>
+            </table>
+          </div>
+
+          <h3>Bloqueios de Agenda</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Voluntário</th>
+                  <th>Período</th>
+                  <th>Motivo</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="availability-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="tab-repertorio" class="card panel hidden">
+          <h2>Repertório</h2>
+          <form id="song-form" class="form-grid" data-role="ADMIN,LIDER_MINISTERIO">
+            <input id="song-title" placeholder="Música" required />
+            <input id="song-key" placeholder="Tom" required />
+            <input id="song-bpm" type="number" min="40" max="260" placeholder="BPM" />
+            <input id="song-link" type="url" placeholder="Link web (YouTube/Spotify/Cifra)" />
+            <input id="song-tags" placeholder="Tags separadas por vírgula" />
+            <button type="submit" class="btn primary">Adicionar música</button>
+          </form>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Música</th>
+                  <th>Tom</th>
+                  <th>BPM</th>
+                  <th>Link</th>
+                  <th>Tags</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="songs-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="tab-cultos" class="card panel hidden">
+          <h2>Gestão de Cultos</h2>
+          <form id="service-form" class="form-grid" data-role="ADMIN,LIDER_MINISTERIO">
+            <input id="service-date" type="date" required />
+            <input id="service-time" type="time" />
+            <input id="service-title" placeholder="Título do culto" required />
+            <input id="service-notes" placeholder="Observações" />
+            <input id="service-tags" placeholder="Tags do culto (vírgula)" />
+            <button type="submit" class="btn primary">Criar culto</button>
+          </form>
+
+          <form id="service-search-form" class="form-grid">
+            <input id="service-query" placeholder="Buscar por nome do culto" />
+            <input id="service-query-date" type="date" />
+            <button type="submit" class="btn ghost">Pesquisar cultos</button>
+          </form>
+          <div id="services-list" class="service-list"></div>
+
+          <div id="service-modal" class="modal-backdrop hidden">
+            <div class="modal-card">
+              <div class="modal-head">
+                <h3 id="service-detail-title">Detalhes do culto</h3>
+                <button id="service-modal-close" class="btn ghost" type="button">Fechar</button>
+              </div>
+              <p id="service-detail-empty" class="hidden">Selecione um culto para editar e montar repertório/escala.</p>
+
+              <div id="service-detail-content" class="hidden">
+                <form id="service-edit-form" class="form-grid" data-role="ADMIN,LIDER_MINISTERIO">
+                  <input id="detail-service-date" type="date" required />
+                  <input id="detail-service-time" type="time" />
+                  <input id="detail-service-title-input" placeholder="Título" required />
+                  <input id="detail-service-notes" placeholder="Observações" />
+                  <input id="detail-service-tags" placeholder="Tags do culto (vírgula)" />
+                  <button type="submit" class="btn primary">Salvar alterações</button>
+                </form>
+                <button id="detail-delete-service" class="btn danger" data-role="ADMIN,LIDER_MINISTERIO">Excluir culto</button>
+
+                <form id="setlist-form" class="form-grid" data-role="ADMIN,LIDER_MINISTERIO">
+                  <input id="setlist-song-query" placeholder="Buscar música por nome/tom/tag" />
+                  <select id="setlist-song" required></select>
+                  <input id="setlist-position" type="number" min="1" placeholder="Posição" required />
+                  <input id="setlist-note" placeholder="Nota" />
+                  <button type="submit" class="btn primary">Adicionar ao repertório</button>
+                </form>
+
+                <form id="assign-form" class="form-grid" data-role="ADMIN,LIDER_MINISTERIO">
+                  <input id="assign-user-query" placeholder="Buscar voluntário por nome" />
+                  <select id="assign-user" required></select>
+                  <input id="assign-role" placeholder="Função na escala" required />
+                  <button id="assign-submit" type="submit" class="btn primary">Adicionar voluntário</button>
+                </form>
+                <p id="assign-availability-warning" class="warning-msg hidden"></p>
+
+                <form id="self-assign-form" class="form-grid" data-role="VOLUNTARIO">
+                  <input id="self-assign-role" placeholder="Função que deseja servir" required />
+                  <button type="submit" class="btn primary">Me inscrever neste culto</button>
+                </form>
+
+                <div id="service-detail-boards"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-planejamento" class="card panel hidden">
+          <h2>Planejamento Avançado</h2>
+          <form id="repeat-form" class="form-grid" data-role="ADMIN,LIDER_MINISTERIO">
+            <select id="repeat-source-service" required></select>
+            <input id="repeat-start" type="date" required />
+            <input id="repeat-end" type="date" required />
+            <input id="repeat-interval" type="number" min="1" value="7" placeholder="Intervalo (dias)" />
+            <input id="repeat-prefix" placeholder="Prefixo de título (opcional)" />
+            <button type="submit" class="btn primary">Repetir culto + escala</button>
+          </form>
+          <div id="repeat-result" class="highlight"></div>
+
+          <h3>Criar cultos em massa (dia da semana)</h3>
+          <form id="bulk-service-form" class="form-grid" data-role="ADMIN,LIDER_MINISTERIO">
+            <input id="bulk-start" type="date" required />
+            <input id="bulk-end" type="date" required />
+            <input id="bulk-weekdays" placeholder="Dias da semana (ex: 0,4)" required />
+            <input id="bulk-morning-title" placeholder="Título manhã (opcional)" value="Culto da Manhã" />
+            <input id="bulk-morning-time" type="time" value="09:00" />
+            <input id="bulk-night-title" placeholder="Título noite (opcional)" value="Culto da Noite" />
+            <input id="bulk-night-time" type="time" value="19:00" />
+            <input id="bulk-notes" placeholder="Observações padrão" />
+            <button type="submit" class="btn primary">Criar cultos em massa</button>
+          </form>
+          <div id="bulk-result" class="highlight"></div>
+        </section>
+
+        <section id="tab-aprovacoes" class="card panel hidden">
+          <h2>Fila de Aprovação</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Culto</th>
+                  <th>Voluntário</th>
+                  <th>Função</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody id="approvals-table"></tbody>
+            </table>
+          </div>
+          <h3>Solicitações de troca de escala</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Culto</th>
+                  <th>Voluntário</th>
+                  <th>Função</th>
+                  <th>Motivo</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody id="swap-requests-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="tab-notificacoes" class="card panel hidden">
+          <h2>Notificações</h2>
+          <form id="notify-test-form" class="form-grid">
+            <select id="notify-channel">
+              <option value="PUSH">Push</option>
+              <option value="WHATSAPP">WhatsApp</option>
+              <option value="EMAIL">E-mail</option>
+            </select>
+            <button type="submit" class="btn primary">Enviar teste</button>
+            <button id="notify-reminders-btn" type="button" class="btn ghost" data-role="ADMIN,LIDER_MINISTERIO">Enviar lembretes pendentes</button>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Quando</th>
+                  <th>Canal</th>
+                  <th>Evento</th>
+                  <th>Destino</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="notifications-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="tab-registros" class="card panel hidden">
+          <h2>Registros de Auditoria</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Quando</th>
+                  <th>Ação</th>
+                  <th>Entidade</th>
+                  <th>Usuário</th>
+                  <th>Detalhes</th>
+                </tr>
+              </thead>
+              <tbody id="logs-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="tab-ministerios" class="card panel hidden">
+          <h2>Ministérios</h2>
+          <form id="ministry-form" class="form-grid" data-role="ADMIN">
+            <input id="ministry-name" placeholder="Nome do ministério" required />
+            <input id="ministry-description" placeholder="Descrição" />
+            <button type="submit" class="btn primary">Criar ministério</button>
+          </form>
+          <ul id="ministries-list" class="list"></ul>
+        </section>
+      </section>
+    </main>
+
+    <div id="account-modal" class="modal-backdrop hidden">
+      <div class="modal-card account-modal-card">
+        <div class="modal-head">
+          <h3>Painel do Usuário</h3>
+          <button id="account-modal-close" class="btn ghost" type="button">Fechar</button>
+        </div>
+        <div class="account-grid">
+          <section class="card mini-panel">
+            <h3>Perfil</h3>
+            <img id="account-photo-preview" class="account-photo" alt="Foto do perfil" src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=220&q=80" />
+            <input id="profile-photo-input" type="file" accept="image/*" class="hidden" />
+            <button id="profile-photo-btn" class="btn ghost" type="button">Trocar foto</button>
+            <p id="account-user-line" class="kicker"></p>
+          </section>
+          <section class="card mini-panel">
+            <h3>Trocar Senha</h3>
+            <form id="change-password-form" class="stack">
+              <input id="current-password" type="password" placeholder="Senha atual" required />
+              <input id="new-password" type="password" placeholder="Nova senha" required />
+              <input id="confirm-password" type="password" placeholder="Confirmar nova senha" required />
+              <button type="submit" class="btn primary">Salvar nova senha</button>
+            </form>
+          </section>
+          <section class="card mini-panel">
+            <h3>Meus Ministérios</h3>
+            <ul id="account-ministries" class="list"></ul>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script src="/app/app.js"></script>
+  </body>
+</html>

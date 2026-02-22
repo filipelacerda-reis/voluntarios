@@ -1,0 +1,5 @@
+const ROLE_ADMIN = 'ADMIN';
+const ROLE_LEADER = 'LIDER_MINISTERIO';
+const ROLE_VOL = 'VOLUNTARIO';
+
+module.exports = { ROLE_ADMIN, ROLE_LEADER, ROLE_VOL };

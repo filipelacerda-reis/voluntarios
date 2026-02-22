@@ -1,3 +1,5 @@
+import { api, setAuthToken, clearAuthToken, jsonAuthHeaders } from './api.js';
+
 const state = {
   token: localStorage.getItem('token') || '',
   user: JSON.parse(localStorage.getItem('user') || 'null'),
@@ -12,6 +14,9 @@ const state = {
   swapRequests: [],
   notifications: [],
   logs: [],
+  logsPage: 1,
+  logsLimit: 50,
+  logsHasMore: false,
   dashboard: null,
 };
 
@@ -96,25 +101,16 @@ function assignmentClass(status) {
   return 'assignment-pending';
 }
 
-async function api(path, options = {}) {
-  const res = await fetch(path, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}),
-    },
-  });
-
-  if (res.status === 204) return null;
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.message || 'Falha na requisição');
-  return body;
-}
-
-function authHeaders() {
+function normalizeLogsResponse(response) {
+  if (Array.isArray(response)) {
+    return {
+      items: response,
+      hasMore: response.length >= state.logsLimit,
+    };
+  }
   return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${state.token}`,
+    items: response?.items || [],
+    hasMore: Boolean(response?.hasMore),
   };
 }
 
@@ -474,6 +470,14 @@ function renderLogs() {
     `,
     )
     .join('');
+  const pageInfo = $('logs-page-info');
+  if (pageInfo) {
+    pageInfo.textContent = state.logs.length ? `Mostrando ${state.logs.length} registros` : 'Sem registros';
+  }
+  const loadMore = $('logs-load-more');
+  if (loadMore) {
+    loadMore.classList.toggle('hidden', !state.logsHasMore);
+  }
 }
 
 async function openService(serviceId) {
@@ -491,7 +495,7 @@ async function loadAll() {
     }
   };
 
-  const [ministries, users, songs, services, availabilityBlocks, approvals, swapRequests, notifications, logs, dashboard] = await Promise.all([
+  const [ministries, users, songs, services, availabilityBlocks, approvals, swapRequests, notifications, dashboard] = await Promise.all([
     safe(api('/api/ministries'), []),
     hasRole('ADMIN', 'LIDER_MINISTERIO') ? safe(api('/api/users'), []) : Promise.resolve([]),
     safe(api('/api/songs'), []),
@@ -500,7 +504,6 @@ async function loadAll() {
     hasRole('ADMIN', 'LIDER_MINISTERIO') ? safe(api('/api/approvals/pending'), []) : Promise.resolve([]),
     safe(api('/api/swap-requests?status=PENDENTE'), []),
     safe(api('/api/notifications'), []),
-    hasRole('ADMIN', 'LIDER_MINISTERIO') ? safe(api('/api/audit-logs'), []) : Promise.resolve([]),
     safe(api('/api/dashboard'), { users: 0, songs: 0, services: 0, blocks: 0, pendingApprovals: 0, pendingSwaps: 0, assignments: [] }),
   ]);
 
@@ -513,7 +516,6 @@ async function loadAll() {
   state.approvals = approvals;
   state.swapRequests = swapRequests;
   state.notifications = notifications;
-  state.logs = logs;
   state.dashboard = dashboard;
 
   renderDashboard();
@@ -526,8 +528,29 @@ async function loadAll() {
   renderServiceDetail();
   renderApprovals();
   renderNotifications();
-  renderLogs();
   renderProfileCard();
+  try {
+    await loadAuditLogs(1, false);
+  } catch (_err) {
+    state.logs = [];
+    state.logsHasMore = false;
+    renderLogs();
+  }
+}
+
+async function loadAuditLogs(page = 1, append = false) {
+  if (!hasRole('ADMIN', 'LIDER_MINISTERIO')) {
+    state.logs = [];
+    state.logsHasMore = false;
+    renderLogs();
+    return;
+  }
+  const response = await api(`/api/audit-logs?page=${page}&limit=${state.logsLimit}`);
+  const normalized = normalizeLogsResponse(response);
+  state.logs = append ? [...state.logs, ...normalized.items] : normalized.items;
+  state.logsPage = page;
+  state.logsHasMore = normalized.hasMore;
+  renderLogs();
 }
 
 async function doLogin(email, password) {
@@ -539,7 +562,7 @@ async function doLogin(email, password) {
 
   state.token = result.token;
   state.user = result.user;
-  localStorage.setItem('token', state.token);
+  setAuthToken(state.token);
   localStorage.setItem('user', JSON.stringify(state.user));
 
   $('auth-card').classList.add('hidden');
@@ -582,7 +605,7 @@ function wireEvents() {
     try {
       const result = await api('/api/auth/change-password', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       e.target.reset();
@@ -608,9 +631,18 @@ function wireEvents() {
   });
 
   $('logout-btn').addEventListener('click', () => {
-    localStorage.removeItem('token');
+    clearAuthToken();
     localStorage.removeItem('user');
     location.reload();
+  });
+
+  $('logs-load-more')?.addEventListener('click', async () => {
+    if (!state.logsHasMore) return;
+    try {
+      await loadAuditLogs(state.logsPage + 1, true);
+    } catch (err) {
+      alert(err.message);
+    }
   });
 
   document.querySelectorAll('.tab').forEach((btn) => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
@@ -656,7 +688,7 @@ function wireEvents() {
     try {
       await api('/api/ministries', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({ name: $('ministry-name').value, description: $('ministry-description').value }),
       });
       e.target.reset();
@@ -671,7 +703,7 @@ function wireEvents() {
     try {
       await api('/api/users', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           name: $('user-name').value,
           email: $('user-email').value,
@@ -693,7 +725,7 @@ function wireEvents() {
     try {
       await api('/api/availability-blocks', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           userId: $('availability-user').value || null,
           startDate: $('availability-start').value,
@@ -713,7 +745,7 @@ function wireEvents() {
     try {
       await api('/api/songs', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           title: $('song-title').value,
           key: $('song-key').value,
@@ -734,7 +766,7 @@ function wireEvents() {
     try {
       await api('/api/services', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           serviceDate: $('service-date').value,
           serviceTime: $('service-time').value || null,
@@ -756,7 +788,7 @@ function wireEvents() {
     try {
       await api(`/api/services/${state.currentService.id}`, {
         method: 'PATCH',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           serviceDate: $('detail-service-date').value,
           serviceTime: $('detail-service-time').value || null,
@@ -778,7 +810,7 @@ function wireEvents() {
     try {
       await api(`/api/services/${state.currentService.id}/setlist`, {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           songId: $('setlist-song').value,
           position: $('setlist-position').value,
@@ -799,7 +831,7 @@ function wireEvents() {
     try {
       await api(`/api/services/${state.currentService.id}/assignments`, {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           userId: $('assign-user').value,
           teamRole: $('assign-role').value,
@@ -819,7 +851,7 @@ function wireEvents() {
     try {
       await api(`/api/services/${state.currentService.id}/self-assign`, {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({ teamRole: $('self-assign-role').value }),
       });
       e.target.reset();
@@ -835,7 +867,7 @@ function wireEvents() {
     try {
       const result = await api('/api/planning/repeat-service', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           sourceServiceId: $('repeat-source-service').value,
           startDate: $('repeat-start').value,
@@ -879,7 +911,7 @@ function wireEvents() {
 
       const result = await api('/api/services/bulk', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({
           startDate: $('bulk-start').value,
           endDate: $('bulk-end').value,
@@ -902,7 +934,7 @@ function wireEvents() {
     try {
       await api('/api/notifications/test', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
         body: JSON.stringify({ channel: $('notify-channel').value }),
       });
       await loadAll();
@@ -916,7 +948,7 @@ function wireEvents() {
     try {
       const result = await api('/api/notifications/reminders/pending-confirmations', {
         method: 'POST',
-        headers: authHeaders(),
+        headers: jsonAuthHeaders(),
       });
       await loadAll();
       alert(`Lembretes enviados: ${result.reminders || 0}`);
@@ -931,7 +963,7 @@ function wireEvents() {
     if (!ok) return;
     try {
       const deletedId = state.currentService.id;
-      await api(`/api/services/${deletedId}`, { method: 'DELETE', headers: authHeaders() });
+      await api(`/api/services/${deletedId}`, { method: 'DELETE', headers: jsonAuthHeaders() });
       state.currentService = null;
       await loadAll();
       renderServiceDetail();
@@ -987,7 +1019,7 @@ function wireEvents() {
       if (toggle) {
         await api(`/api/users/${toggle.dataset.id}/active`, {
           method: 'PATCH',
-          headers: authHeaders(),
+          headers: jsonAuthHeaders(),
           body: JSON.stringify({ active: toggle.dataset.next === 'true' }),
         });
       }
@@ -1013,19 +1045,19 @@ function wireEvents() {
 
         await api(`/api/users/${user.id}/ministries`, {
           method: 'PATCH',
-          headers: authHeaders(),
+          headers: jsonAuthHeaders(),
           body: JSON.stringify({ ministryIds }),
         });
       }
 
       if (songDelete) {
-        await api(`/api/songs/${songDelete.dataset.id}`, { method: 'DELETE', headers: authHeaders() });
+        await api(`/api/songs/${songDelete.dataset.id}`, { method: 'DELETE', headers: jsonAuthHeaders() });
       }
 
       if (assignmentStatus) {
         await api(`/api/assignments/${assignmentStatus.dataset.id}/status`, {
           method: 'PATCH',
-          headers: authHeaders(),
+          headers: jsonAuthHeaders(),
           body: JSON.stringify({ status: assignmentStatus.dataset.status }),
         });
       }
@@ -1035,7 +1067,7 @@ function wireEvents() {
         if (!reason.trim()) return;
         await api(`/api/assignments/${assignmentSwap.dataset.id}/swap-request`, {
           method: 'POST',
-          headers: authHeaders(),
+          headers: jsonAuthHeaders(),
           body: JSON.stringify({ reason }),
         });
       }
@@ -1044,13 +1076,13 @@ function wireEvents() {
         const note = prompt('Observação da decisão (opcional):') || '';
         await api(`/api/approvals/${approvalDecision.dataset.assignmentId}`, {
           method: 'PATCH',
-          headers: authHeaders(),
+          headers: jsonAuthHeaders(),
           body: JSON.stringify({ decision: approvalDecision.dataset.decision, note }),
         });
       }
 
       if (availabilityDelete) {
-        await api(`/api/availability-blocks/${availabilityDelete.dataset.id}`, { method: 'DELETE', headers: authHeaders() });
+        await api(`/api/availability-blocks/${availabilityDelete.dataset.id}`, { method: 'DELETE', headers: jsonAuthHeaders() });
       }
 
       if (setlistEdit) {
@@ -1065,7 +1097,7 @@ function wireEvents() {
 
         await api(`/api/services/${state.currentService.id}/setlist/${item.id}`, {
           method: 'PATCH',
-          headers: authHeaders(),
+          headers: jsonAuthHeaders(),
           body: JSON.stringify({
             position: Number(newPosition),
             note: newNote,
@@ -1079,7 +1111,7 @@ function wireEvents() {
         if (!ok) return;
         await api(`/api/services/${state.currentService.id}/setlist/${setlistDelete.dataset.itemId}`, {
           method: 'DELETE',
-          headers: authHeaders(),
+          headers: jsonAuthHeaders(),
         });
       }
 
@@ -1087,7 +1119,7 @@ function wireEvents() {
         const note = prompt('Observação da decisão (opcional):') || '';
         await api(`/api/swap-requests/${swapDecision.dataset.id}`, {
           method: 'PATCH',
-          headers: authHeaders(),
+          headers: jsonAuthHeaders(),
           body: JSON.stringify({ decision: swapDecision.dataset.decision, note }),
         });
       }
@@ -1121,6 +1153,7 @@ function wireEvents() {
 }
 
 async function bootstrap() {
+  if (state.token) setAuthToken(state.token);
   applyTheme(localStorage.getItem(THEME_KEY) || 'light');
   wireEvents();
   switchTab('dashboard');
@@ -1147,7 +1180,7 @@ async function bootstrap() {
       renderProfileCard();
       await loadAll();
     } catch (_error) {
-      localStorage.removeItem('token');
+      clearAuthToken();
       localStorage.removeItem('user');
       location.reload();
     }
